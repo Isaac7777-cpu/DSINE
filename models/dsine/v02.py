@@ -174,9 +174,19 @@ class DSINE_v02(nn.Module):
         up_pred_norm = upsample_via_mask(pred_norm, up_mask, self.downsample_ratio, padding='replicate')
         up_pred_norm = F.normalize(up_pred_norm, dim=1)
 
-        return h_new, pred_norm, up_pred_norm
-    
-    def forward(self, img, intrins=None, mode='train'):
+        debug = {
+            "term_u": term_u.detach(),
+            "term_v": term_v.detach(),
+            "du_over_fu": du_over_fu.detach(),
+            "dv_over_fv": dv_over_fv.detach(),
+            "nghbr_angle": nghbr_angle.detach(),
+            "nghbr_axes": nghbr_axes.detach(),
+            "nghbr_prob": nghbr_prob.detach(),
+        }
+
+        return h_new, pred_norm, up_pred_norm, debug
+
+    def forward(self, img, intrins=None, mode="train", extract_axis=False):
         # Step 1. encoder
         features = self.encoder(img)
 
@@ -201,11 +211,18 @@ class DSINE_v02(nn.Module):
         # iterative refinement
         up_pred_norm = self.upsample(h, pred_norm, uv_8)
         pred_list = [up_pred_norm]
+        debug_list = []
         for i in range(self.num_iter_train) if mode == 'train' else range(self.num_iter_test):
-            h, pred_norm, up_pred_norm = self.refine(h, feat_map, 
-                                                     pred_norm.detach(), 
-                                                     intrins, orig_H, orig_W, uv_8, ray_8)
+            h, pred_norm, up_pred_norm, debug = self.refine(
+                h, feat_map, pred_norm.detach(), intrins, orig_H, orig_W, uv_8, ray_8
+            )
             pred_list.append(up_pred_norm)
+
+            if extract_axis:
+                debug_list.append(debug)
+
+        if extract_axis:
+            return pred_list, debug_list
         return pred_list
 
     def get_1x_lr_params(self):

@@ -46,6 +46,8 @@ if __name__ == '__main__':
             img = np.array(img).astype(np.float32) / 255.0
             img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(device)
 
+            img_raw = img
+
             # pad input
             _, _, orig_H, orig_W = img.shape
             lrtb = utils.get_padding(orig_H, orig_W)
@@ -65,7 +67,7 @@ if __name__ == '__main__':
             intrins[:, 0, 2] += lrtb[0]
             intrins[:, 1, 2] += lrtb[2]
 
-            preds = model(img, intrins=intrins, mode="test")   # e.g. a list/tuple of predictions at different stages
+            preds, debug_info = model(img, intrins=intrins, mode="test", extract_axis=True)   # e.g. a list/tuple of predictions at different stages
 
             print(f"Total of {len(preds)} steps performed for refinement.")
 
@@ -82,6 +84,19 @@ if __name__ == '__main__':
 
                 im = Image.fromarray(pred_norm[0, ...])
                 im.save(target_path)
+
+            debug_target_path = img_path.replace("/img/", "/output/").replace(
+                ext, "_debug.pt"
+            )
+
+            torch.save(
+                {
+                    "img_path": img_path,
+                    "img_raw": img_raw.cpu(),
+                    "debug_list": debug_info,
+                },
+                debug_target_path,
+            )
 
             # pred_norm = model(img, intrins=intrins)[-1]
             # pred_norm = pred_norm[:, :, lrtb[2]:lrtb[2]+orig_H, lrtb[0]:lrtb[0]+orig_W]
