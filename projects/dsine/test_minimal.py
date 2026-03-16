@@ -8,14 +8,13 @@ import torch.nn.functional as F
 from torchvision import transforms
 from PIL import Image
 
-import sys
 sys.path.append('../../')
 import utils.utils as utils
 import projects.dsine.config as config
 from utils.projection import intrins_from_fov, intrins_from_txt
 
 if __name__ == '__main__':
-    device = torch.device('cuda')
+    device = torch.device('mps')
     args = config.get_args(test=True)
     assert os.path.exists(args.ckpt_path)
 
@@ -66,15 +65,33 @@ if __name__ == '__main__':
             intrins[:, 0, 2] += lrtb[0]
             intrins[:, 1, 2] += lrtb[2]
 
-            pred_norm = model(img, intrins=intrins)[-1]
-            pred_norm = pred_norm[:, :, lrtb[2]:lrtb[2]+orig_H, lrtb[0]:lrtb[0]+orig_W]
+            preds = model(img, intrins=intrins, mode="test")   # e.g. a list/tuple of predictions at different stages
 
-            # save to output folder
-            # NOTE: by saving the prediction as uint8 png format, you lose a lot of precision
-            # if you want to use the predicted normals for downstream tasks, we recommend saving them as float32 NPY files
-            target_path = img_path.replace('/img/', '/output/').replace(ext, '.png')
+            print(f"Total of {len(preds)} steps performed for refinement.")
 
-            pred_norm = pred_norm.detach().cpu().permute(0, 2, 3, 1).numpy()
-            pred_norm = (((pred_norm + 1) * 0.5) * 255).astype(np.uint8)
-            im = Image.fromarray(pred_norm[0,...])
-            im.save(target_path)
+            for i, pred_norm in enumerate(preds):
+                pred_norm = pred_norm[:, :, lrtb[2]:lrtb[2]+orig_H, lrtb[0]:lrtb[0]+orig_W]
+
+                pred_norm = pred_norm.detach().cpu().permute(0, 2, 3, 1).numpy()
+                pred_norm = (((pred_norm + 1) * 0.5) * 255).astype(np.uint8)
+
+                target_path = (
+                    img_path.replace('/img/', '/output/')
+                            .replace(ext, f'_stage{i}.png')
+                )
+
+                im = Image.fromarray(pred_norm[0, ...])
+                im.save(target_path)
+
+            # pred_norm = model(img, intrins=intrins)[-1]
+            # pred_norm = pred_norm[:, :, lrtb[2]:lrtb[2]+orig_H, lrtb[0]:lrtb[0]+orig_W]
+            #
+            # # save to output folder
+            # # NOTE: by saving the prediction as uint8 png format, you lose a lot of precision
+            # # if you want to use the predicted normals for downstream tasks, we recommend saving them as float32 NPY files
+            # target_path = img_path.replace('/img/', '/output/').replace(ext, '.png')
+            #
+            # pred_norm = pred_norm.detach().cpu().permute(0, 2, 3, 1).numpy()
+            # pred_norm = (((pred_norm + 1) * 0.5) * 255).astype(np.uint8)
+            # im = Image.fromarray(pred_norm[0,...])
+            # im.save(target_path)

@@ -207,7 +207,7 @@ def demo(args, model, InputStream, frame_name):
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda')
+    device = torch.device('mps')
     args = config.get_args(test=True)
 
     if args.ckpt_path is None:
